@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>医知助手 · 医疗知识 Agent</title>
+<style>
+  /* ============ 设计令牌（Claude 骨架 + 医疗蓝绿重着色） ============ */
+  :root{
+    --primary:#0F766E; --primary-2:#115E59; --primary-3:#134E4A; --primary-subtle:#DCF3F0;
+    --brand-bg:#E8F5F2;
+    --bg:#F7F5F0; --app:#FCFAF6; --surface:#FFFFFF;
+    --sidebar-bg:#F1EEE7; --border:#E3DFD6; --border-strong:#CFC9BD;
+    --ink:#171411; --ink-2:#514B44; --ink-3:#6E675F;
+    --green:#0E8A5F; --amber:#B4530A; --red:#B91C1C;
+    --shadow:0 1px 2px rgba(60,50,30,.05),0 6px 20px rgba(60,50,30,.08);
+    --radius:16px;
+    --fs:16px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{font-size:var(--fs)}
+  body{
+    font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--app);color:var(--ink);line-height:1.65;
+    -webkit-font-smoothing:antialiased;height:100vh;overflow:hidden;font-size:1rem;
+  }
+  button{font-family:inherit;font-size:1rem;cursor:pointer;border:none;background:none;color:inherit}
+  input{font-family:inherit}
+  /* 触控目标 >=44px，焦点环 3px */
+  button{min-height:44px;border-radius:10px;padding:0 18px}
+  button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid rgba(15,118,110,.4);outline-offset:2px}
+
+  .flex{display:flex}
+  .grow{flex:1}
+
+  /* ============ 布局 ============ */
+  .shell{display:flex;height:100vh}
+  .sidebar{
+    width:280px;flex:0 0 280px;background:var(--sidebar-bg);border-right:1px solid var(--border-strong);
+    display:flex;flex-direction:column;padding:20px 16px 16px;transition:margin-left .25s ease,flex-basis .25s ease;
+  }
+  .shell.collapsed .sidebar{margin-left:-280px;flex-basis:0}
+  .brand{display:flex;align-items:center;gap:10px;padding:6px 4px 16px}
+  .brand-logo{width:38px;height:38px;border-radius:11px;background:var(--brand-bg);color:var(--primary);
+    display:grid;place-items:center}
+  .brand b{font-size:1.14rem;font-weight:650}
+  .brand small{display:block;color:var(--ink-3);font-size:.78rem;font-weight:400}
+
+  .side-btn{display:flex;align-items:center;gap:10px;width:100%;text-align:left;color:var(--ink-2);
+    border:1px solid var(--border);background:var(--surface);border-radius:12px;justify-content:flex-start}
+  .side-btn:hover{background:var(--primary-subtle);color:var(--primary);border-color:var(--primary)}
+  .side-btn svg{width:18px;height:18px}
+
+  .side-label{font-size:.78rem;color:var(--ink-3);letter-spacing:.04em;text-transform:uppercase;margin:16px 4px 4px}
+
+  /* 历史对话 */
+  .hist{flex:1;overflow-y:auto;margin-top:2px;display:flex;flex-direction:column;gap:4px;min-height:0}
+  .hist::-webkit-scrollbar{width:6px}
+  .hist::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:9px}
+  .hist-item{width:100%;text-align:left;display:block;padding:10px 12px;border-radius:10px;font-size:.88rem;
+    color:var(--ink-2);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-height:40px}
+  .hist-item:hover{background:var(--surface);color:var(--primary)}
+  .hist-empty{font-size:.8rem;color:var(--ink-3);padding:6px 4px;line-height:1.6}
+
+  .zoom-row{display:flex;gap:6px}
+  .zoom-row button{flex:1;min-height:40px;border:1px solid var(--border);border-radius:10px;color:var(--ink-2);background:var(--surface)}
+  .zoom-row button.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+
+  .legend{font-size:.8rem;color:var(--ink-2);line-height:1.9;border-top:1px solid var(--border);margin-top:14px;padding-top:14px}
+  .legend .dot{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:8px;vertical-align:-1px}
+  .legend .sec{font-size:.72rem;color:var(--ink-3);letter-spacing:.04em;margin-top:8px}
+
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--app)}
+  .topbar{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--app)}
+  .hamburger{min-height:40px;min-width:40px;border:1px solid var(--border);border-radius:10px;display:grid;place-items:center;color:var(--ink-2);background:var(--surface)}
+  .hamburger:hover{color:var(--primary);border-color:var(--primary)}
+  .hamburger svg{width:20px;height:20px}
+
+  .chat{flex:1;overflow-y:auto;scroll-behavior:smooth}
+  .chat-inner{max-width:760px;margin:0 auto;padding:28px 24px 120px}
+
+  /* ============ 欢迎态 ============ */
+  .welcome{text-align:center;padding-top:7vh}
+  .welcome .emoji-logo{width:76px;height:76px;margin:0 auto 16px;border-radius:24px;background:var(--brand-bg);
+    color:var(--primary);display:grid;place-items:center;box-shadow:inset 0 0 0 1px rgba(15,118,110,.12)}
+  .welcome h1{font-size:1.7rem;font-weight:650;letter-spacing:-.01em}
+  .welcome p{color:var(--ink-2);margin-top:8px}
+  .intents{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin:32px auto 0;max-width:720px}
+  .intent{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 18px;text-align:left;
+    min-height:104px;display:flex;flex-direction:column;gap:10px;transition:.16s;align-items:flex-start}
+  .intent:hover{border-color:var(--primary);box-shadow:var(--shadow);transform:translateY(-2px)}
+  .intent .ic{width:38px;height:38px;border-radius:11px;background:var(--primary-subtle);color:var(--primary);
+    display:grid;place-items:center}
+  .intent .ic svg{width:20px;height:20px}
+  .intent b{font-size:1rem}
+  .intent span{font-size:.84rem;color:var(--ink-3)}
+
+  .hint-privacy{margin-top:26px;font-size:.8rem;color:var(--ink-2);display:flex;align-items:center;justify-content:center;gap:7px}
+  .hint-privacy svg{width:15px;height:15px;color:var(--primary)}
+
+  /* ============ 对话态 ============ */
+  .msg{display:flex;gap:12px;margin-bottom:26px;animation:rise .22s ease}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .avatar{width:34px;height:34px;flex:0 0 34px;border-radius:10px;background:var(--primary-subtle);color:var(--primary);
+    display:grid;place-items:center;font-size:.82rem;font-weight:650}
+  .msg.user{flex-direction:row-reverse}
+  .msg.user .avatar{background:var(--primary);color:#fff}
+  .bubble{max-width:78%}
+  .msg.user .bubble{background:var(--primary);color:#fff;border-radius:16px 16px 4px 16px;padding:12px 16px}
+  .msg.bot .bubble{background:var(--surface);border:1px solid var(--border);border-radius:16px 16px 16px 4px;padding:16px 18px;box-shadow:var(--shadow)}
+
+  .md p{margin:6px 0}
+  .md strong{font-weight:650}
+  .md h4{margin:12px 0 4px;font-size:.98rem}
+  .md ul,.md ol{margin:6px 0 6px 20px}
+  .md li{margin:3px 0}
+  .md hr{border:none;border-top:1px dashed var(--border-strong);margin:12px 0}
+  .md blockquote{border-left:3px solid var(--primary);padding-left:12px;color:var(--ink-2);margin:8px 0}
+
+  /* 证据 / 来源 */
+  .meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px;font-size:.78rem}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;border:1px solid transparent}
+  .badge svg{width:12px;height:12px}
+  .keybox{display:flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:8px;padding:4px 8px;background:var(--bg);color:var(--ink-3)}
+  .keyinp{border:none;outline:none;background:transparent;color:var(--ink);width:150px;font-size:.78rem}
+  .keyinp::placeholder{color:var(--ink-3)}
+  .conf-hi{color:var(--green);background:rgba(5,150,105,.08);border-color:rgba(5,150,105,.25)}
+  .conf-mid{color:var(--amber);background:rgba(217,119,6,.08);border-color:rgba(217,119,6,.25)}
+  .conf-low{color:var(--red);background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.25)}
+  .source{font-size:.78rem;color:var(--ink-3);margin-top:8px}
+  .source summary{cursor:pointer;user-select:none;color:var(--primary);list-style:none;display:inline-flex;align-items:center;gap:6px;min-height:44px}
+  .source summary::-webkit-details-marker{display:none}
+  .src-item{font-size:.82rem;color:var(--ink-2);padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-top:8px;background:var(--bg)}
+  .src-item b{color:var(--primary);font-weight:600}
+
+  /* 思考中 */
+  .typing{display:inline-flex;gap:5px;align-items:center;padding:6px 0}
+  .typing i{width:8px;height:8px;border-radius:50%;background:var(--border-strong);animation:b 1.2s infinite}
+  .typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+  @keyframes b{0%,80%,100%{opacity:.3;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+
+  /* ============ 紧急警示条 ============ */
+  .alert{display:none;position:sticky;top:0;z-index:50;background:#B91C1C;color:#fff;padding:12px 20px;
+    align-items:center;gap:12px;font-size:.92rem}
+  .alert.show{display:flex}
+  .alert a{color:#fff;text-decoration:underline;font-weight:650;min-height:44px;display:inline-flex;align-items:center}
+  .alert b{font-weight:700}
+
+  /* ============ 免责横幅 ============ */
+  .disclaimer{display:none;max-width:760px;margin:0 auto;padding:14px 18px;margin-top:16px;background:var(--primary-subtle);
+    border:1px solid rgba(15,118,110,.3);border-radius:12px;font-size:.84rem;color:var(--ink-2)}
+  .disclaimer.show{display:block}
+  .disclaimer button{float:right;min-height:32px;min-width:32px;padding:0;border-radius:8px;color:var(--ink-3)}
+  .disclaimer button:hover{color:var(--primary)}
+
+  /* ============ 输入区（收在主区内，形成停靠栏） ============ */
+  .composer{border-top:1px solid var(--border);background:var(--app);padding:12px 20px 14px}
+  .composer-inner{max-width:760px;margin:0 auto;background:var(--surface);
+    border:1px solid var(--border-strong);border-radius:18px;box-shadow:var(--shadow);padding:8px 10px;display:flex;align-items:flex-end;gap:8px}
+  .composer-inner:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px rgba(15,118,110,.15)}
+  .attach-btn{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;border-radius:12px;color:var(--ink-2)}
+  .attach-btn:hover{background:var(--primary-subtle);color:var(--primary)}
+  .attach-btn svg{width:20px;height:20px}
+  #file{display:none}
+  textarea{flex:1;border:none;outline:none;resize:none;font-size:1rem;line-height:1.5;padding:10px 4px;max-height:140px;background:transparent;color:var(--ink)}
+  textarea::placeholder{color:var(--ink-3)}
+  .send-btn{width:44px;height:44px;flex:0 0 44px;border-radius:12px;background:var(--primary);color:#fff;display:grid;place-items:center;transition:.15s}
+  .send-btn:hover{background:var(--primary-2)}
+  .send-btn:disabled{opacity:.4;cursor:not-allowed}
+  .send-btn svg{width:20px;height:20px}
+  .attach-preview{display:flex;flex-wrap:wrap;gap:8px;padding:8px 12px 0 66px;max-width:760px;margin:0 auto}
+  .attach-preview .thumb{position:relative;width:64px;height:64px;border-radius:10px;border:1px solid var(--border);overflow:hidden;background:#fff}
+  .attach-preview .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .attach-preview .thumb button{position:absolute;top:2px;right:2px;width:18px;height:18px;min-height:18px;padding:0;border-radius:50%;
+    background:rgba(0,0,0,.6);color:#fff;font-size:.7rem;line-height:1}
+  .privacy-note{max-width:760px;margin:6px auto 0;font-size:.78rem;color:var(--ink-3);text-align:center;display:flex;align-items:center;justify-content:center;gap:6px}
+  .privacy-note svg{width:13px;height:13px;color:var(--primary)}
+
+  @media(max-width:720px){
+    .intents{grid-template-columns:1fr}
+    .msg .avatar{display:none}
+    .bubble{max-width:88%}
+    .keybox{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="shell" id="shell">
+
+  <!-- 侧栏 -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M3 12h18" stroke-linecap="round"/></svg>
+      </div>
+      <div>
+        <b>医知助手</b>
+        <small>医疗知识 Agent</small>
+      </div>
+    </div>
+
+    <button class="side-btn" id="newChat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+      新对话
+    </button>
+
+    <div class="side-label">历史对话</div>
+    <div class="hist" id="histBox">
+      <div class="hist-empty">提问过的内容会保存在这里，方便回溯。</div>
+    </div>
+
+    <div class="side-label">字号</div>
+    <div class="zoom-row">
+      <button data-z="0">A−</button>
+      <button data-z="1" class="on">A</button>
+      <button data-z="2">A+</button>
+      <button data-z="3">A++</button>
+    </div>
+
+    <div class="legend">
+      <div><span class="dot" style="background:var(--green)"></span>高相关</div>
+      <div><span class="dot" style="background:var(--amber)"></span>中相关</div>
+      <div><span class="dot" style="background:var(--red)"></span>低相关</div>
+      <div class="sec">本地知识库检索 + 大模型生成<br>图片上传经 OCR 识别</div>
+    </div>
+  </aside>
+
+  <!-- 主区 -->
+  <main class="main">
+    <div class="topbar">
+      <button class="hamburger" id="toggleSide" aria-label="切换侧栏">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16" stroke-linecap="round"/></svg>
+      </button>
+      <div style="font-size:.92rem;color:var(--ink-2);flex:1">健康相关问题 · 尽量先查知识库再回答</div>
+      <span class="badge" style="color:var(--primary);background:var(--primary-subtle);border:none;font-size:.78rem">本地离线 · DeepSeek 驱动</span>
+      <div class="keybox">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;flex:none"><path d="M7 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0 0h13v3m-3-3v3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <input type="password" id="apiKey" class="keyinp" placeholder="粘贴 API Key（可留空用默认）" autocomplete="off" spellcheck="false" />
+      </div>
+    </div>
+
+    <!-- 紧急警示条 -->
+    <div class="alert" id="alertBar">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div>⚠ 您提到疑似急症关键词（胸痛 / 呼吸困难等）。若出现持续性胸痛，请立即<a href="tel:120"><b>拨打 120</b></a>并保持平静，勿自行驾车。</div>
+    </div>
+
+    <div class="chat" id="chat"></div>
+
+    <!-- 输入区 -->
+    <div class="composer">
+      <div class="attach-preview" id="previews"></div>
+      <div class="composer-inner">
+        <button class="attach-btn" id="attachBtn" title="上传图片（化验单/说明书）">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3M17 8l-5-5-5 5M12 3v12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <input type="file" id="file" accept="image/*" />
+        <textarea id="inputBox" rows="1" placeholder="输入你的健康问题…（可同时上传图片）"></textarea>
+        <button class="send-btn" id="sendBtn" title="发送" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <div class="privacy-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        问题与图片仅发到本地后端（127.0.0.1），不离开你的电脑；API Key 仅存于本地浏览器，仅用于本次调用
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- 免责横幅 -->
+<div class="disclaimer" id="disclaimer">
+  首次使用提醒：本助手为健康科普工具，回答基于本地知识库与模型生成，<b>不能替代医生的面诊与处方</b>。紧急情况请及时就医。点击右上关闭。
+  <button id="closeDis" aria-label="关闭">✕</button>
+</div>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const chat = $('#chat');
+  const inputBox = $('#inputBox');
+  const sendBtn = $('#sendBtn');
+  const FILE = $('#file');
+
+  let history = [];      // 会话历史 {role, content}
+  let attachments = [];  // 当前待发送图片（dataURL）
+  let busy = false;
+
+  /* ---------- 欢迎态 ---------- */
+  const INTENTS = [
+    {t:'高血压饮食', d:'有哪些注意事项？', ic:'<path d="M3 12l4-4 4 4 4-4 4 4M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/>'},
+    {t:'糖尿病控糖', d:'日常饮食怎么安排？', ic:'<path d="M4 6h16M4 12h16M4 18h10"/>'},
+    {t:'体检前准备', d:'有什么要注意？', ic:'<path d="M9 3h6M10 3v4a2 2 0 1 0 4 0V3M6 8h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8Z"/>'},
+    {t:'解读化验单', d:'上传图片或描述指标', ic:'<path d="M6 6h12v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6Z M9 3v3M15 3v3"/>'},
+  ];
+
+  function welcome(){
+    chat.innerHTML = '';
+    const p = document.createElement('div');
+    p.className = 'welcome';
+    p.innerHTML = `
+      <div class="emoji-logo"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7-4.6-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.4-9.5 9-9.5 9Z" stroke-linejoin="round"/></svg></div>
+      <h1>你好，我是医知助手</h1>
+      <p>基于本地医疗知识库 + DeepSeek 的 Agent，能查资料、能读图片。</p>
+      <div class="intents">${INTENTS.map((c,i)=>`
+        <button class="intent" data-i="${i}"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${c.ic}</svg></span>
+        <b>${c.t}</b><span>${c.d}</span></button>`).join('')}</div>
+      <div class="hint-privacy">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" stroke-linejoin="round"/></svg>
+        支持上传图片（OCR 识别）· 仅本地运行
+      </div>`;
+    chat.appendChild(p);
+    chat.querySelectorAll('.intent').forEach(b => b.onclick = () => {
+      const c = INTENTS[+b.dataset.i];
+      inputBox.value = c.t + ' ' + c.d;
+      send();
+    });
+  }
+
+  /* ---------- 渲染 ---------- */
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+  function bold(s){return esc(s).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')}
+
+  function renderMD(txt){
+    const lines = txt.split('\n'); let html='', inList=null;
+    const close = () => { if(inList){html+=`</${inList}>`; inList=null;} };
+    for(let r of lines){
+      const l = r.trim();
+      if(/^[-*•]\s+/.test(l)){ const m=l.replace(/^[-*•]\s+/,'');
+        if(inList!=='ul'){close(); html+='<ul>'; inList='ul';} html+=`<li>${bold(m)}</li>`; }
+      else if(/^\d+[.、)]\s+/.test(l)){ const m=l.replace(/^\d+[.、)]\s+/,'');
+        if(inList!=='ol'){close(); html+='<ol>'; inList='ol';} html+=`<li>${bold(m)}</li>`; }
+      else if(!l){ close(); continue; }
+      else if(/^#{1,4}\s/.test(l)){ close(); html+=`<h4>${bold(l.replace(/^#+\s+/,''))}</h4>`; }
+      else if(/^[-—–]+\s*$/.test(l)){ close(); html+='<hr>'; }
+      else { close(); html+=`<p>${bold(l)}</p>`; }
+    }
+    close();
+    return html;
+  }
+
+  function confClass(score, hasDocs){
+    if(!hasDocs) return 'conf-mid';
+    if(score>=0.55) return 'conf-hi';
+    if(score>=0.35) return 'conf-mid';
+    return 'conf-low';
+  }
+  const confName = {'conf-hi':'高相关','conf-mid':'中相关','conf-low':'低相关'};
+
+  function addUser(text, img){
+    const m = document.createElement('div'); m.className='msg user';
+    const tb = document.createElement('div'); tb.className='bubble';
+    if(img){ const im=document.createElement('img'); im.src=img; im.style.cssText='max-width:200px;border-radius:10px;margin-bottom:8px;display:block'; tb.appendChild(im); }
+    const p=document.createElement('p'); p.textContent=text; tb.appendChild(p);
+    m.appendChild(avatar('你')); m.appendChild(tb); chat.appendChild(m); scroll();
+  }
+  function addBot(text, sources){
+    const m=document.createElement('div'); m.className='msg bot';
+    const tb=document.createElement('div'); tb.className='bubble';
+    const md=document.createElement('div'); md.className='md'; md.innerHTML=renderMD(text); tb.appendChild(md);
+    const meta=document.createElement('div'); meta.className='meta';
+    const hasDocs = sources && sources.length>0;
+    const score = hasDocs ? sources[0].score : 0;
+    const cc = confClass(score, hasDocs);
+    meta.innerHTML=`<span class="badge ${cc}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>${confName[cc]}</span><span class="badge">证据等级 · 资料原文转述</span>`;
+    tb.appendChild(meta);
+    if(hasDocs){
+      const dt=document.createElement('details'); dt.className='source';
+      dt.innerHTML=`<summary>查看 ${sources.length} 条知识来源</summary>`+sources.map(s=>`<div class="src-item"><b>${s.score>=0.55?'●':s.score>=0.35?'◐':'○'} ${s.score.toFixed(2)}</b> · ${esc(s.text)}</div>`).join('');
+      tb.appendChild(dt);
+    }
+    m.appendChild(avatar('助')); m.appendChild(tb); chat.appendChild(m); scroll();
+  }
+  function avatar(txt){const a=document.createElement('div');a.className='avatar';a.textContent=txt;return a;}
+  function thinking(){
+    const m=document.createElement('div'); m.className='msg bot';
+    const tb=document.createElement('div'); tb.className='bubble';
+    tb.innerHTML='<div class="typing"><i></i><i></i><i></i></div><div style="font-size:.8rem;color:var(--ink-3);margin-top:6px">正在查知识库并组织回答…</div>';
+    m.appendChild(avatar('助')); m.appendChild(tb); chat.appendChild(m); scroll();
+    return m;
+  }
+  function scroll(){const c=chat;requestAnimationFrame(()=>c.scrollTop=c.scrollHeight)}
+  function clearWelcome(){const w=chat.querySelector('.welcome'); if(w)w.remove()}
+
+  /* ---------- 发送 ---------- */
+  async function send(){
+    const text=inputBox.value.trim();
+    if(busy) return;
+    if(!text && attachments.length===0) return;
+    clearWelcome();
+    let content = text;
+    let img = null;
+    const att = attachments.slice();
+    attachments=[]; renderPreviews();
+
+    // 若带图片，先 OCR
+    if(att.length){
+      img = att[0];
+      sendBtn.disabled=true; inputBox.disabled=true;
+      addUser(text||'<识别图片中的内容>', img);
+      try{
+        const r = await fetch('/api/ocr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:att[0]})});
+        const j = await r.json();
+        if(j.text && j.text.trim()){
+          content = (text? text + '\n' : '') + '[知识库新增图片OCR内容]\n' + j.text;
+        } else {
+          content = (text? text : '请查看我上传的图片');
+        }
+      }catch(e){ content = (text? text : '查看我上传的图片'); }
+    } else {
+      addUser(text, null);
+    }
+    history.push({role:'user', content});
+    if(text) recordHist(text);   // 记录到侧栏"历史对话"
+    sendBtn.disabled=true; inputBox.disabled=true;
+    const th = thinking();
+
+    try{
+      const api_key = $('#apiKey').value.trim();
+      const r = await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:history, api_key:api_key||undefined})});
+      const j = await r.json();
+      if(j.error) throw j;   // 携带 need_key 标记的对象，方便下面识别
+      th.remove();
+      addBot(j.answer, j.sources||[]);
+      history.push({role:'assistant', content:j.answer});
+      checkEmergency(text);
+    }catch(e){
+      th.remove();
+      if(e && e.need_key){
+        $('#apiKey').focus();
+        $('#apiKey').style.borderColor = 'var(--red,#e11d48)';
+        setTimeout(()=>{ $('#apiKey').style.borderColor=''; }, 2500);
+        addBot('⚠️ ' + (e.error||'请先输入 API Key') + '，点击右上角钥匙框粘贴你的 DeepSeek API Key。', []);
+      } else {
+        addBot('出错了：' + (e.error||e.message), []);
+      }
+    }
+    inputBox.disabled=false; inputBox.value=''; inputBox.focus();
+    sendBtn.disabled=false; autoGrow(); checkEmergency('');
+  }
+
+  function checkEmergency(txt){
+    const em=/胸痛|心绞痛|心梗|呼吸困难|呼吸急促|晕厥|意识不清|大出血|药物过量|严重过敏|拨打120|emergency/i;
+    $('#alertBar').classList.toggle('show', !!(txt&&em.test(txt)));
+  }
+
+  /* ---------- 输入框 ---------- */
+  function autoGrow(){inputBox.style.height='auto';inputBox.style.height=Math.min(inputBox.scrollHeight,140)+'px'}
+  inputBox.addEventListener('input',()=>{autoGrow();sendBtn.disabled=busy&&false;checkEmergency(inputBox.value);updateSend()});
+  inputBox.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
+  function updateSend(){
+    sendBtn.disabled = !(inputBox.value.trim() || attachments.length);
+  }
+
+  /* ---------- 图片上传 ---------- */
+  $('#attachBtn').addEventListener('click',()=>FILE.click());
+  FILE.addEventListener('change',e=>{
+    addImage(e.target.files); FILE.value='';
+  });
+  const pasteMgr = e => e.clipboardData && [...e.clipboardData.items].forEach(it=>{if(it.type.startsWith('image/')){const f=it.getAsFile();addImage([f])}});
+  document.addEventListener('paste', pasteMgr);
+  function addImage(files){
+    if(!files||!files[0]) return;
+    if(attachments.length>=1){alert('本版单次仅支持识别一张图片');return}
+    const r=new FileReader();
+    r.onload=()=>{attachments.push(r.result);renderPreviews();updateSend()};
+    r.readAsDataURL(files[0]);
+  }
+  function renderPreviews(){
+    const box=$('#previews');box.innerHTML='';
+    attachments.forEach((d,i)=>{
+      const t=document.createElement('div');t.className='thumb';
+      t.innerHTML=`<img src="${d}" alt="附件"><button data-i="${i}" aria-label="删除">✕</button>`;
+      t.querySelector('button').onclick=()=>{attachments.splice(i,1);renderPreviews();updateSend()};
+      box.appendChild(t);
+    });
+  }
+  /* ---------- 历史对话（侧栏） ---------- */
+  const HIST_KEY='med-hist';
+  function readHist(){ try{return JSON.parse(localStorage.getItem(HIST_KEY)||'[]')}catch(e){return []} }
+  function recordHist(q){
+    let list=readHist();
+    list=list.filter(x=>x!==q); list.unshift(q); list=list.slice(0,12);
+    localStorage.setItem(HIST_KEY, JSON.stringify(list)); renderHist();
+  }
+  function renderHist(){
+    const box=$('#histBox'); const list=readHist();
+    box.innerHTML = list.length
+      ? list.map((q,i)=>`<button class="hist-item" data-i="${i}" title="${esc(q)}">${esc(q)}</button>`).join('')
+      : '<div class="hist-empty">提问过的内容会保存在这里，方便回溯。</div>';
+    box.querySelectorAll('.hist-item').forEach(b=>b.onclick=()=>{
+      inputBox.value=list[+b.dataset.i]; inputBox.focus();
+    });
+  }
+
+  /* ---------- 侧栏 / 新对话 / 字号 / 免责 ---------- */
+  $('#toggleSide').addEventListener('click',()=>$('#shell').classList.toggle('collapsed'));
+  $('#newChat').addEventListener('click',()=>{ if(confirm('开始新对话？历史记录将被清空。')){history=[];attachments=[];renderPreviews();checkEmergency('');welcome()} });
+  const ZS=[15,16,18,20];
+  document.querySelectorAll('.zoom-row button').forEach(b=>b.onclick=()=>{
+    document.querySelectorAll('.zoom-row button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); document.documentElement.style.setProperty('--fs', ZS[+b.dataset.z]+'px');
+  });
+  $('#closeDis').addEventListener('click',()=>$('#disclaimer').classList.remove('show'));
+
+  /* ---------- 初始化 ---------- */
+  const KEY_STORE = 'dk.medkey';
+  const keyInput = $('#apiKey');
+  const savedKey = (sessionStorage.getItem(KEY_STORE) || localStorage.getItem(KEY_STORE) || '').trim();
+  if(savedKey){ keyInput.value = savedKey; localStorage.removeItem(KEY_STORE); }  // 迁移旧值并清理 localStorage
+  keyInput.addEventListener('input', ()=>{ sessionStorage.setItem(KEY_STORE, keyInput.value.trim()); });
+  welcome(); renderHist();
+  if(!localStorage.getItem('dis-seen')){ $('#disclaimer').classList.add('show'); localStorage.setItem('dis-seen','1'); }
+  inputBox.focus();
+  updateSend();
+})();
+</script>
+</body>
+</html>

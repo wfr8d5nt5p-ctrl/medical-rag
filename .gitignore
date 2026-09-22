@@ -1,0 +1,20 @@
+# ===== 密钥与配置（绝不提交）=====
+.env
+
+# ===== Python 缓存 =====
+__pycache__/
+*.pyc
+
+# ===== 向量数据库（由 01_建知识库.py 重建）=====
+chroma_db/
+
+# ===== 测试杂项 =====
+test_key.py
+make_test_img.py
+test_report.png
+
+# ===== 系统 / 编辑器 =====
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
