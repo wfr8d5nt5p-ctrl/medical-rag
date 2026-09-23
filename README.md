@@ -19,8 +19,10 @@
 ## 快速开始
 
 ```bash
-# 1. 安装依赖（建议先建虚拟环境）
-pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements-rag.txt
+# 1. 创建 uv 虚拟环境并安装依赖
+#    （未安装 uv 时可先用 python -m pip install uv 安装）
+uv venv .venv
+uv pip install -r requirements-rag.txt
 
 # 2. 设置国内模型镜像（可跳过，若下载慢）
 set HF_ENDPOINT=https://hf-mirror.com
@@ -29,13 +31,16 @@ set HF_ENDPOINT=https://hf-mirror.com
 copy .env.example .env
 
 # 4. 构建知识库
-python 01_建知识库.py
+.venv\Scripts\python 01_建知识库.py
 
 # 5. 启动网页版
 cd web
-python server.py
+.venv\Scripts\python server.py
 # 浏览器打开 http://127.0.0.1:8000
 ```
+
+> 也可以直接双击 `启动医知助手.bat`，脚本会优先使用 `.venv` 环境启动网页版。
+> 内置依赖说明见 `pyproject.toml`（顶层依赖）与 `requirements-rag.txt`。
 
 ## 命令行示例
 

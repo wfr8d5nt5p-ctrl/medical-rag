@@ -1,0 +1,25 @@
+[project]
+name = "medical-rag"
+description = "医疗健康 RAG Agent：多工具 ReAct · 混合检索 · Rerank 精排 · OCR 读图 · 网页界面"
+version = "1.0.0"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "chromadb",
+    "sentence-transformers",
+    "langchain-community",
+    "langchain-text-splitters",
+    "langchain-openai",
+    "langgraph",
+    "python-dotenv",
+    "openpyxl",
+    "streamlit",
+    "rapidocr-onnxruntime",
+    "pillow",
+]
+
+[dependency-groups]
+dev = []
+
+[tool.uv]
+package = false
